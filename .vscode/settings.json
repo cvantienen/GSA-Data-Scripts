@@ -1,0 +1,14 @@
+{
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "server": "170.187.201.28",
+            "port": 5432,
+            "driver": "PostgreSQL",
+            "name": "GSADB",
+            "database": "gsa_advantage",
+            "password": "686400Cj$",
+            "username": "cody"
+        }
+    ]
+}

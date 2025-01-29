@@ -1,0 +1,100 @@
+Big Product DB
+
+
+Count Rows
+#--------------------------------------------------------------------------#
+SELECT * 
+FROM gsa_advantage.public.gsa_product_extract_jan2024
+LIMIT 10;
+
+
+Count Rows
+#--------------------------------------------------------------------------#
+SELECT COUNT(*) 
+FROM gsa_advantage.public.gsa_product_extract_jan2024;
+
+
+Clean DB
+#--------------------------------------------------------------------------#
+VACUUM gsa_advantage.public.gsa_product_extract_jan2024;
+
+
+
+Delete last Million Rows
+#--------------------------------------------------------------------------#
+WITH LastMillion AS (
+    SELECT jprod_id
+    FROM gsa_advantage.public.gsa_product_extract_jan2024
+    ORDER BY jprod_id DESC  -- Assuming jprod_id increases over time, use it to define the "last" rows
+    LIMIT 1000000
+)
+DELETE FROM gsa_advantage.public.gsa_product_extract_jan2024
+WHERE jprod_id IN (SELECT jprod_id FROM LastMillion);
+
+
+Get All Price Comps
+#return all items from a specific contract along with
+# 3 comparison items for each one, based on the same manufacturer_part_number
+#--------------------------------------------------------------------------#
+WITH contract_items AS (
+    -- Get all items from the specific contract
+    SELECT *
+    FROM gsa_product_extract_jan2024
+    WHERE contract_number = 'GS-07F-0577T'  -- Replace with your specific contract number
+    LIMIT 100
+),
+similar_items AS (
+    -- Get all items with the same manufacturer_part_number from different contracts
+    SELECT *
+    FROM gsa_product_extract_jan2024 gi
+    WHERE gi.contract_number != 'GS-07F-0577T'  -- Ensure items are from different contracts
+    AND gi.manufacturer_part_number IN (SELECT manufacturer_part_number FROM contract_items)
+)
+-- Get 3 matches for each item from the contract
+SELECT ci.*, si.*
+FROM contract_items ci
+JOIN (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY manufacturer_part_number ORDER BY RANDOM()) as rn
+    FROM similar_items
+) si
+ON ci.manufacturer_part_number = si.manufacturer_part_number
+WHERE si.rn <= 3;  -- Ensure 3 comparisons per product
+
+
+Get Sample Price Comps of 100 random items from contract
+with 3 competor item matches 
+#--------------------------------------------------------------------------#
+WITH reference_items AS (
+    -- Get 100 random items from the specific contract
+    SELECT *
+    FROM gsa_product_extract_jan2024
+    WHERE contract_number = 'GS-07F-0577T'
+    ORDER BY RANDOM()  -- Randomize the selection of the 100 items
+    LIMIT 100
+),
+competitor_items AS (
+    -- Get all items with the same manufacturer_part_number from different contracts
+    SELECT *
+    FROM gsa_product_extract_jan2024 gi
+    WHERE gi.contract_number != 'GS-07F-0577T'  -- Ensure items are from different contracts
+    AND gi.manufacturer_part_number IN (SELECT manufacturer_part_number FROM reference_items)
+)
+-- Get 3 matches for each item from the contract, with columns varying depending on number of matches found
+SELECT ref.*, 
+       comp1.*, 
+       comp2.*, 
+       comp3.*
+FROM reference_items ref
+LEFT JOIN (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY manufacturer_part_number ORDER BY RANDOM()) as rn
+    FROM competitor_items
+) comp1 ON ref.manufacturer_part_number = comp1.manufacturer_part_number AND comp1.rn = 1
+LEFT JOIN (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY manufacturer_part_number ORDER BY RANDOM()) as rn
+    FROM competitor_items
+) comp2 ON ref.manufacturer_part_number = comp2.manufacturer_part_number AND comp2.rn = 2
+LEFT JOIN (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY manufacturer_part_number ORDER BY RANDOM()) as rn
+    FROM competitor_items
+) comp3 ON ref.manufacturer_part_number = comp3.manufacturer_part_number AND comp3.rn = 3
+ORDER BY ref.jprod_id;

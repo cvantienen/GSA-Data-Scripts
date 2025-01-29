@@ -1,0 +1,4 @@
+Polars
+psycopg2
+reportlab
+python-dotenv
