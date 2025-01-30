@@ -9,7 +9,7 @@ def generate_sample_contract_report(conn):
         -- Get 100 random items from the specific contract
         SELECT *
         FROM gsa_product_extract_jan2024
-        WHERE contract_number = 'GS-07F-0577T'
+        WHERE contract_number = '47QSEA20D003B'
         ORDER BY RANDOM()  -- Randomize the selection of the 100 items
         LIMIT 100
     ),
@@ -17,31 +17,56 @@ def generate_sample_contract_report(conn):
         -- Get all items with the same manufacturer_part_number from different contracts
         SELECT *
         FROM gsa_product_extract_jan2024 gi
-        WHERE gi.contract_number != 'GS-07F-0577T'  -- Ensure items are from different contracts
+        WHERE gi.contract_number != '47QSEA20D003B'  -- Ensure items are from different contracts
         AND gi.manufacturer_part_number IN (SELECT manufacturer_part_number FROM reference_items)
     )
-    -- Get 3 matches for each item from the contract, with columns varying depending on number of matches found
-    SELECT ref.*,
-           comp1.*,
-           comp2.*,
-           comp3.*
+    -- Combine reference items with their matches
+    SELECT ref.*, 'reference' AS source
     FROM reference_items ref
-    LEFT JOIN (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY manufacturer_part_number ORDER BY RANDOM()) as rn
-        FROM competitor_items
-    ) comp1 ON ref.manufacturer_part_number = comp1.manufacturer_part_number AND comp1.rn = 1
-    LEFT JOIN (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY manufacturer_part_number ORDER BY RANDOM()) as rn
-        FROM competitor_items
-    ) comp2 ON ref.manufacturer_part_number = comp2.manufacturer_part_number AND comp2.rn = 2
-    LEFT JOIN (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY manufacturer_part_number ORDER BY RANDOM()) as rn
-        FROM competitor_items
-    ) comp3 ON ref.manufacturer_part_number = comp3.manufacturer_part_number AND comp3.rn = 3
-    ORDER BY ref.jprod_id;
+    UNION ALL
+    SELECT comp.*, 'competitor' AS source
+    FROM competitor_items comp
+    ORDER BY jprod_id;
     """
-    df = pl.read_sql(query, conn)
+    df = pl.read_database(query, conn)
 
+    # Ensure the price column is correctly populated and is of numeric type
+    df = df.with_columns(pl.col("price").cast(pl.Float64))
+
+
+    # Check data types
+    print(df.describe())
     print(df)
-    # Perform data analysis (example: calculate mean price of products)
+
+    # Group by manufacturer_part_number and source, then calculate average price
+    # This gives the average price for each manufacturer_part_number from Competitor and Reference
+    # the average price does not include the reference price, only the competitor price
     
+    price_comparison = df.group_by(["manufacturer_part_number", "source"]).agg(
+        pl.col("price").mean().alias("average_price")
+    )
+    # Show the result
+    print(price_comparison)
+
+
+    # Pivot the table to compare the prices side-by-side
+    pivot_comparison = price_comparison.pivot(
+        values="average_price", 
+        columns="source", 
+        aggregate_function="first"
+    )
+
+    # Show the result
+    print(pivot_comparison)
+
+
+    # Calculate the standard deviation of prices for each manufacturer_part_number
+    price_deviation = df.group_by("manufacturer_part_number").agg(
+        pl.col("price").std().alias("price_deviation")
+    )
+
+    
+    print(price_deviation)
+
+
+    return df

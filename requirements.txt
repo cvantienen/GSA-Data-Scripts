@@ -1,4 +1,4 @@
 Polars
 psycopg2
-reportlab
+python-docx
 python-dotenv
