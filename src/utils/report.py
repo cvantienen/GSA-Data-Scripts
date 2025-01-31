@@ -150,6 +150,9 @@ def generate_sample_word(df, company):
     doc.add_paragraph(f"- Count of items with price_deviation more than $10: {count_more_than_10}")
     doc.add_paragraph(f"- Count of items with price_deviation more than $100: {count_more_than_100}")
 
+    # Add details about the manufactures
+    doc.add_heading('Detailed Analysis:', level=1)
+
     # Add detailed table from DataFrame
     doc.add_heading('Detailed Analysis:', level=1)
     table = doc.add_table(rows=1, cols=len(df.columns))
