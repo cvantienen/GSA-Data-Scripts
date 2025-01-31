@@ -1,6 +1,6 @@
 import os
 from utils.config import get_db_connection 
-from utils.report import generate_sample_contract_report
+from utils.report import generate_sample_contract_report, generate_sample_word
 
 """
 Build using docker
@@ -24,7 +24,7 @@ def main():
     
     try:
         # Generate different reports
-        df = generate_sample_contract_report(conn)
+        df = generate_sample_contract_report(conn, "47QSEA20D003B")
         
         # Ensure the output directory exists
         output_dir = "/app/output"
@@ -32,6 +32,9 @@ def main():
         
         # Save the DataFrame to a CSV file inside the container
         df.write_csv(f"{output_dir}/path.csv")
+
+        generate_sample_word(df, "10G FEDERAL INC")
+
     finally:
         # Close the database connection
         conn.close()

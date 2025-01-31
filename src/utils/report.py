@@ -1,15 +1,24 @@
 import polars as pl
+from docx import Document
 
-
-def generate_sample_contract_report(conn):
+def generate_sample_contract_report(conn, contract_number):
     """Generate a sample report for 100 products that a contract has and returns up to 3
-      competitor products for each."""
-    query = """
+      competitor products for each.
+
+        Args:
+            conn (Connection): The database connection.
+            contract_number (str): The contract number to generate the report for.
+
+        Returns:
+            combined_df (pl.DataFrame): The DataFrame with the combined data.
+
+      """
+    query = f"""
     WITH reference_items AS (
         -- Get 100 random items from the specific contract
         SELECT *
         FROM gsa_product_extract_jan2024
-        WHERE contract_number = '47QSEA20D003B'
+        WHERE contract_number =  '{contract_number}'
         ORDER BY RANDOM()  -- Randomize the selection of the 100 items
         LIMIT 100
     ),
@@ -17,7 +26,7 @@ def generate_sample_contract_report(conn):
         -- Get all items with the same manufacturer_part_number from different contracts
         SELECT *
         FROM gsa_product_extract_jan2024 gi
-        WHERE gi.contract_number != '47QSEA20D003B'  -- Ensure items are from different contracts
+        WHERE gi.contract_number != '{contract_number}'  -- Ensure items are from different contracts
         AND gi.manufacturer_part_number IN (SELECT manufacturer_part_number FROM reference_items)
     )
     -- Combine reference items with their matches
@@ -28,9 +37,11 @@ def generate_sample_contract_report(conn):
     FROM competitor_items comp
     ORDER BY jprod_id;
     """
+
+
     df = pl.read_database(query, conn)
 
-    # Ensure the price column is correctly populated and is of numeric type
+    # Make Correct Data Type so shit doesn't fuck up calculations
     df = df.with_columns(pl.col("price").cast(pl.Float64))
 
     # Calculate the comp average price for each manufacturer_part_number
@@ -39,53 +50,123 @@ def generate_sample_contract_report(conn):
         pl.col("price").mean().alias("average_price_on_gsa")
     )
 
-        # Extract the reference price for each manufacturer_part_number
-    reference_price = df.filter(pl.col("source") == "reference").select(
-        "manufacturer_part_number", "price"
-    ).rename({"price": "reference_price"})
-
-
     # Calculate the standard deviation of prices for each manufacturer_part_number
     price_deviation = df.group_by("manufacturer_part_number").agg(
         pl.col("price").std().alias("price_deviation")
     )
 
-     # Combine the competitor average price, reference price, and price deviation into a single DataFrame
-    price_comparison = comp_average_price.join(reference_price, on="manufacturer_part_number", how="left")
+    # Combine the average price and price deviation into a single DataFrame
+    price_comparison = comp_average_price.join(price_deviation, on="manufacturer_part_number", how="left")
+
+    print("PRICE_COMPS_1")
+    print("******************************************")
+    print(price_comparison)
+
+    # Select the columns to include in the final report from the original contractors items
+    selected_columns = df.select([
+        "contractor_name",
+        "contract_number",
+        "manufacturer_part_number",
+        "manufacturer_name",
+        "product_name",
+        "price",
+    ]).filter(pl.col("contract_number") == contract_number)
+
+    # Combine the selected columns with the calculated columns
+    combined_df = selected_columns.join(price_comparison, on="manufacturer_part_number", how="left")
+
+    # Calculate the percent difference from the Contractors price vs the average price on GSA
+    combined_df = combined_df.with_columns(
+        ((pl.col("price") - pl.col("average_price_on_gsa")) / pl.col("average_price_on_gsa")).alias("percent_difference")
+    )
 
     print("PRICE_COMPS_2")
     print("******************************************")
     print(price_comparison)
 
-    price_comparison = price_comparison.join(price_deviation, on="manufacturer_part_number", how="left")
-
-        # Select the columns you need
-    selected_columns = df.select([
-        "manufacturer_part_number",
-        "manufacturer_name",
-        "gsin",
-        "date_last_updated",
-    ]).unique()
-
-    # Combine the selected columns with the calculated columns
-    combined_df = selected_columns.join(price_comparison, on="manufacturer_part_number", how="left")
-
-
-    print("PRICE_COMPS_3")
-    print("******************************************")
-    print(price_comparison)
 
     print("Selected columns")
     print("******************************************")
     print(selected_columns)
 
-
-    
     print("Finished DF")
     print("******************************************")
     print(combined_df)
 
+    return combined_df
 
 
+def generate_sample_word(df, company):
+    """Create a Word report from the DataFrame and save it to the output directory.
+        The report includes general statements about the data and a detailed table of the data.
 
-    return df
+        Args:
+            df (pl.DataFrame): The DataFrame to include in the report.
+            company (str): The directory to save the report to.
+
+        Returns:
+            doc (Document): The Word document object.
+    """
+
+    # Calculate general statements based on the Price % difference From GSA Average
+    below_competitor = df.filter(pl.col("percent_difference") < 0).shape[0]
+    above_competitor = df.filter(pl.col("percent_difference") > 0).shape[0]
+    avg_percent_diff = df.select(pl.col("percent_difference").mean()).item()
+    max_percent_diff = df.select(pl.col("percent_difference").max()).item()
+    min_percent_diff = df.select(pl.col("percent_difference").min()).item()
+
+    # Calculate general statements based on the price deviation
+    avg_price_deviation = df.select(pl.col("price_deviation").mean()).item()
+    max_price_deviation = df.select(pl.col("price_deviation").max()).item()
+    min_price_deviation = df.select(pl.col("price_deviation").min()).item()
+
+    # Count of items with price_deviation more than $1, $10, and $100
+    count_more_than_1 = df.filter(pl.col("price_deviation") > 1).shape[0]
+    count_more_than_10 = df.filter(pl.col("price_deviation") > 10).shape[0]
+    count_more_than_100 = df.filter(pl.col("price_deviation") > 100).shape[0]
+
+
+    # Create a Word document
+    doc = Document()
+    doc.add_heading(f'Contract Report', 0)
+    doc.add_heading(f'Contract Number: {company}', level=1)
+
+
+    # Add % difference from average statements to the document
+    doc.add_heading('General Statements:', level=1)
+    doc.add_paragraph(f"- Number of items below competitor price: {below_competitor}")
+    doc.add_paragraph(f"- Number of items above competitor price: {above_competitor}")
+    doc.add_paragraph(f"- Average percent difference: {avg_percent_diff:.2%}")
+    doc.add_paragraph(f"- Maximum percent difference: {max_percent_diff:.2%}")
+    doc.add_paragraph(f"- Minimum percent difference: {min_percent_diff:.2%}")
+
+    # Add price deviation statements to the document
+    doc.add_paragraph(f"- Average price deviation: {avg_price_deviation:.2f}")
+    doc.add_paragraph(f"- Maximum price deviation: {max_price_deviation:.2f}")
+    doc.add_paragraph(f"- Minimum price deviation: {min_price_deviation:.2f}")
+
+    # Add price deviation statements of more than $1, $10, and $100
+    doc.add_paragraph(f"- Count of items with price_deviation more than $1: {count_more_than_1}")
+    doc.add_paragraph(f"- Count of items with price_deviation more than $10: {count_more_than_10}")
+    doc.add_paragraph(f"- Count of items with price_deviation more than $100: {count_more_than_100}")
+
+    # Add detailed table from DataFrame
+    doc.add_heading('Detailed Analysis:', level=1)
+    table = doc.add_table(rows=1, cols=len(df.columns))
+    hdr_cells = table.rows[0].cells
+    for i, column in enumerate(df.columns):
+        hdr_cells[i].text = column
+
+    for row in df.to_dicts():
+        row_cells = table.add_row().cells
+        for i, (key, value) in enumerate(row.items()):
+            row_cells[i].text = str(value)
+
+    # Output directory
+    output_dir = "/app/output"
+
+    # Save the document to a file
+    doc.save(f"{output_dir}/report.docx")
+
+    print(f"Report saved to {output_dir}/report.docx")
+    return
