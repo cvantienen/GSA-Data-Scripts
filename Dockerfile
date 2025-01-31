@@ -35,3 +35,4 @@ COPY .env .
 
 # Command to run the Python app and ensure the container exits after execution
 CMD ["sh", "-c", "python3 src/main.py && exit 0"]
+

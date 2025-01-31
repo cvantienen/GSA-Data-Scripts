@@ -33,31 +33,16 @@ def generate_sample_contract_report(conn):
     # Ensure the price column is correctly populated and is of numeric type
     df = df.with_columns(pl.col("price").cast(pl.Float64))
 
-
-    # Check data types
-    print(df.describe())
-    print(df)
-
-    # Group by manufacturer_part_number and source, then calculate average price
-    # This gives the average price for each manufacturer_part_number from Competitor and Reference
-    # the average price does not include the reference price, only the competitor price
-    
-    price_comparison = df.group_by(["manufacturer_part_number", "source"]).agg(
-        pl.col("price").mean().alias("average_price")
-    )
-    # Show the result
-    print(price_comparison)
-
-
-    # Pivot the table to compare the prices side-by-side
-    pivot_comparison = price_comparison.pivot(
-        values="average_price", 
-        columns="source", 
-        aggregate_function="first"
+    # Calculate the comp average price for each manufacturer_part_number
+    # for competitor products only
+    comp_average_price = df.filter(pl.col("source") == "competitor").group_by("manufacturer_part_number").agg(
+        pl.col("price").mean().alias("average_price_on_gsa")
     )
 
-    # Show the result
-    print(pivot_comparison)
+        # Extract the reference price for each manufacturer_part_number
+    reference_price = df.filter(pl.col("source") == "reference").select(
+        "manufacturer_part_number", "price"
+    ).rename({"price": "reference_price"})
 
 
     # Calculate the standard deviation of prices for each manufacturer_part_number
@@ -65,8 +50,42 @@ def generate_sample_contract_report(conn):
         pl.col("price").std().alias("price_deviation")
     )
 
+     # Combine the competitor average price, reference price, and price deviation into a single DataFrame
+    price_comparison = comp_average_price.join(reference_price, on="manufacturer_part_number", how="left")
+
+    print("PRICE_COMPS_2")
+    print("******************************************")
+    print(price_comparison)
+
+    price_comparison = price_comparison.join(price_deviation, on="manufacturer_part_number", how="left")
+
+        # Select the columns you need
+    selected_columns = df.select([
+        "manufacturer_part_number",
+        "manufacturer_name",
+        "gsin",
+        "date_last_updated",
+    ]).unique()
+
+    # Combine the selected columns with the calculated columns
+    combined_df = selected_columns.join(price_comparison, on="manufacturer_part_number", how="left")
+
+
+    print("PRICE_COMPS_3")
+    print("******************************************")
+    print(price_comparison)
+
+    print("Selected columns")
+    print("******************************************")
+    print(selected_columns)
+
+
     
-    print(price_deviation)
+    print("Finished DF")
+    print("******************************************")
+    print(combined_df)
+
+
 
 
     return df
