@@ -80,19 +80,6 @@ def generate_sample_contract_report(conn, contract_number):
         ((pl.col("price") - pl.col("average_price_on_gsa")) / pl.col("average_price_on_gsa")).alias("percent_difference")
     )
 
-    print("PRICE_COMPS_2")
-    print("******************************************")
-    print(price_comparison)
-
-
-    print("Selected columns")
-    print("******************************************")
-    print(selected_columns)
-
-    print("Finished DF")
-    print("******************************************")
-    print(combined_df)
-
     return combined_df
 
 
@@ -125,6 +112,9 @@ def generate_sample_word(df, company):
     count_more_than_10 = df.filter(pl.col("price_deviation") > 10).shape[0]
     count_more_than_100 = df.filter(pl.col("price_deviation") > 100).shape[0]
 
+    # Get the list of manufacturers from the DataFrame
+    manufacturers = df.select("manufacturer_name").unique()
+
 
     # Create a Word document
     doc = Document()
@@ -151,7 +141,9 @@ def generate_sample_word(df, company):
     doc.add_paragraph(f"- Count of items with price_deviation more than $100: {count_more_than_100}")
 
     # Add details about the manufactures
-    doc.add_heading('Detailed Analysis:', level=1)
+    doc.add_heading('Manufactures Used In Sample:', level=1)
+    for manufacturer in manufacturers:
+        doc.add_paragraph(f"- {manufacturer}")
 
     # Add detailed table from DataFrame
     doc.add_heading('Detailed Analysis:', level=1)
@@ -172,4 +164,106 @@ def generate_sample_word(df, company):
     doc.save(f"{output_dir}/report.docx")
 
     print(f"Report saved to {output_dir}/report.docx")
-    return
+    return 
+
+class SamplePriceComp:
+    def __init__(self, conn, contract_number):
+        self.conn = conn
+        self.contract_number = contract_number
+        self.df = None
+        self.analysis_results = None
+
+    def get_100_random_products(self):
+        """ Get 100 random items from the specific contract from the database and load it into a DataFrame."""
+        query = f"""
+        WITH reference_items AS (
+            SELECT *
+            FROM gsa_product_extract_jan2024
+            WHERE contract_number =  '{self.contract_number}'
+            ORDER BY RANDOM()  -- Randomize the selection of the 100 items
+            LIMIT 100
+        ),
+        competitor_items AS (
+            -- Get all items with the same manufacturer_part_number from different contracts
+            SELECT *
+            FROM gsa_product_extract_jan2024 gi
+            WHERE gi.contract_number != '{self.contract_number}'  -- Ensure items are from different contracts
+            AND gi.manufacturer_part_number IN (SELECT manufacturer_part_number FROM reference_items)
+        )
+        -- Combine reference items with their matches
+        SELECT ref.*, 'reference' AS source
+        FROM reference_items ref
+        UNION ALL
+        SELECT comp.*, 'competitor' AS source
+        FROM competitor_items comp
+        ORDER BY jprod_id;
+        """
+        self.df = pl.read_database(query, self.conn)
+        self.df = self.df.with_columns(pl.col("price").cast(pl.Float64))
+
+    def analyze_data(self):
+        """Analyze the DataFrame and store the results."""
+        df = self.df
+        below_competitor = df.filter(pl.col("percent_difference") < 0).shape[0]
+        above_competitor = df.filter(pl.col("percent_difference") > 0).shape[0]
+        avg_percent_diff = df.select(pl.col("percent_difference").mean()).item()
+        max_percent_diff = df.select(pl.col("percent_difference").max()).item()
+        min_percent_diff = df.select(pl.col("percent_difference").min()).item()
+
+        avg_price_deviation = df.select(pl.col("price_deviation").mean()).item()
+        max_price_deviation = df.select(pl.col("price_deviation").max()).item()
+        min_price_deviation = df.select(pl.col("price_deviation").min()).item()
+
+        count_more_than_1 = df.filter(pl.col("price_deviation") > 1).shape[0]
+        count_more_than_10 = df.filter(pl.col("price_deviation") > 10).shape[0]
+        count_more_than_100 = df.filter(pl.col("price_deviation") > 100).shape[0]
+
+        manufacturers = df.select("manufacturer_name").unique()
+
+        self.analysis_results = {
+            "below_competitor": below_competitor,
+            "above_competitor": above_competitor,
+            "avg_percent_diff": avg_percent_diff,
+            "max_percent_diff": max_percent_diff,
+            "min_percent_diff": min_percent_diff,
+            "avg_price_deviation": avg_price_deviation,
+            "max_price_deviation": max_price_deviation,
+            "min_price_deviation": min_price_deviation,
+            "count_more_than_1": count_more_than_1,
+            "count_more_than_10": count_more_than_10,
+            "count_more_than_100": count_more_than_100,
+            "manufacturers": manufacturers
+        }
+
+    def generate_report(self, output_path='sample_contract_report.docx'):
+        """Generate a Word document report based on the analysis results."""
+        doc = Document()
+        doc.add_heading('Sample Contract Report', 0)
+
+        results = self.analysis_results
+        doc.add_paragraph(f"- Number of items below competitor price: {results['below_competitor']}")
+        doc.add_paragraph(f"- Number of items above competitor price: {results['above_competitor']}")
+        doc.add_paragraph(f"- Average percent difference: {results['avg_percent_diff']:.2f}%")
+        doc.add_paragraph(f"- Max percent difference: {results['max_percent_diff']:.2f}%")
+        doc.add_paragraph(f"- Min percent difference: {results['min_percent_diff']:.2f}%")
+        doc.add_paragraph(f"- Average price deviation: ${results['avg_price_deviation']:.2f}")
+        doc.add_paragraph(f"- Max price deviation: ${results['max_price_deviation']:.2f}")
+        doc.add_paragraph(f"- Min price deviation: ${results['min_price_deviation']:.2f}")
+        doc.add_paragraph(f"- Count of items with price deviation more than $1: {results['count_more_than_1']}")
+        doc.add_paragraph(f"- Count of items with price deviation more than $10: {results['count_more_than_10']}")
+        doc.add_paragraph(f"- Count of items with price deviation more than $100: {results['count_more_than_100']}")
+
+        doc.save(output_path)
+
+"""
+# Example usage
+if __name__ == "__main__":
+    conn = get_db_connection()
+    contract_number = '47QSEA20D003B'
+    report = SamplePriceComp(conn, contract_number)
+    report.fetch_data()
+    report.analyze_data()
+    report.generate_report()
+    conn.close()
+
+"""

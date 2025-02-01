@@ -1,4 +1,6 @@
-Polars
+polars
 psycopg2
 python-docx
 python-dotenv
+jupyter
+
