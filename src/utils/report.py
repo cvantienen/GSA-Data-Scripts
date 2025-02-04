@@ -1,5 +1,7 @@
 import polars as pl
 from docx import Document
+from src.test.sampleCompany import get_sample_company
+
 
 def generate_sample_contract_report(conn, contract_number):
     """Generate a sample report for 100 products that a contract has and returns up to 3
@@ -95,27 +97,6 @@ def generate_sample_word(df, company):
             doc (Document): The Word document object.
     """
 
-    # Calculate general statements based on the Price % difference From GSA Average
-    below_competitor = df.filter(pl.col("percent_difference") < 0).shape[0]
-    above_competitor = df.filter(pl.col("percent_difference") > 0).shape[0]
-    avg_percent_diff = df.select(pl.col("percent_difference").mean()).item()
-    max_percent_diff = df.select(pl.col("percent_difference").max()).item()
-    min_percent_diff = df.select(pl.col("percent_difference").min()).item()
-
-    # Calculate general statements based on the price deviation
-    avg_price_deviation = df.select(pl.col("price_deviation").mean()).item()
-    max_price_deviation = df.select(pl.col("price_deviation").max()).item()
-    min_price_deviation = df.select(pl.col("price_deviation").min()).item()
-
-    # Count of items with price_deviation more than $1, $10, and $100
-    count_more_than_1 = df.filter(pl.col("price_deviation") > 1).shape[0]
-    count_more_than_10 = df.filter(pl.col("price_deviation") > 10).shape[0]
-    count_more_than_100 = df.filter(pl.col("price_deviation") > 100).shape[0]
-
-    # Get the list of manufacturers from the DataFrame
-    manufacturers = df.select("manufacturer_name").unique()
-
-
     # Create a Word document
     doc = Document()
     doc.add_heading(f'Contract Report', 0)
@@ -166,10 +147,13 @@ def generate_sample_word(df, company):
     print(f"Report saved to {output_dir}/report.docx")
     return 
 
+
+
+
 class SamplePriceComp:
     def __init__(self, conn, contract_number):
         self.conn = conn
-        self.contract_number = contract_number
+        self.company =  get_sample_company(contract_number)
         self.df = None
         self.analysis_results = None
 
@@ -204,16 +188,20 @@ class SamplePriceComp:
     def analyze_data(self):
         """Analyze the DataFrame and store the results."""
         df = self.df
+
+        # Calculate general statements based on the Price % difference From GSA Average
         below_competitor = df.filter(pl.col("percent_difference") < 0).shape[0]
         above_competitor = df.filter(pl.col("percent_difference") > 0).shape[0]
         avg_percent_diff = df.select(pl.col("percent_difference").mean()).item()
         max_percent_diff = df.select(pl.col("percent_difference").max()).item()
         min_percent_diff = df.select(pl.col("percent_difference").min()).item()
 
+        # Calculate Deviation
         avg_price_deviation = df.select(pl.col("price_deviation").mean()).item()
         max_price_deviation = df.select(pl.col("price_deviation").max()).item()
         min_price_deviation = df.select(pl.col("price_deviation").min()).item()
 
+        # Count items that price deviation is more than $1, $10, and $100
         count_more_than_1 = df.filter(pl.col("price_deviation") > 1).shape[0]
         count_more_than_10 = df.filter(pl.col("price_deviation") > 10).shape[0]
         count_more_than_100 = df.filter(pl.col("price_deviation") > 100).shape[0]
@@ -235,10 +223,18 @@ class SamplePriceComp:
             "manufacturers": manufacturers
         }
 
-    def generate_report(self, output_path='sample_contract_report.docx'):
+    def generate_report(self):
         """Generate a Word document report based on the analysis results."""
+        # Create a Word document
         doc = Document()
-        doc.add_heading('Sample Contract Report', 0)
+        doc.add_heading(f'Sample GSA Contract Analysis', 0)
+        doc.add_heading(f'GSA Contractor: {self.company}')
+        doc.add_heading(f'Contract Number: {self.company.contract_number}', level=1)
+        doc.add_heading(f'Manufacturer: {self.company.url}', level=1)
+        doc.add_heading(f'Manufacturer: {self.company.url}', level=1)
+
+
+
 
         results = self.analysis_results
         doc.add_paragraph(f"- Number of items below competitor price: {results['below_competitor']}")

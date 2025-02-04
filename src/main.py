@@ -1,6 +1,6 @@
 import os
-from utils.config import get_db_connection 
-from utils.report import generate_sample_contract_report, generate_sample_word
+from src.test import get_db_connection
+from src.test import generate_sample_contract_report, generate_sample_word
 
 """
 Build using docker
