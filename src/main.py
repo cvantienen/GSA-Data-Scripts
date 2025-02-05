@@ -1,7 +1,5 @@
-import os
-from src.test import get_db_connection
-from src.test import generate_sample_contract_report, generate_sample_word
-
+from utils.config import get_db_connection
+from utils.report import  SamplePriceComp
 """
 Build using docker
     EXAMPLE -$ build -t container-name .
@@ -23,17 +21,12 @@ def main():
     conn = get_db_connection()
     
     try:
+        contract_num = "47QSEA20D003B"
         # Generate different reports
-        df = generate_sample_contract_report(conn, "47QSEA20D003B")
-        
-        # Ensure the output directory exists
-        output_dir = "/app/output"
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Save the DataFrame to a CSV file inside the container
-        df.write_csv(f"{output_dir}/path.csv")
-
-        generate_sample_word(df, "10G FEDERAL INC")
+        price_comp = SamplePriceComp(conn,  contract_num)
+        price_comp.get_100_random_products()
+        price_comp.analyze_data()
+        price_comp.generate_report()
 
     finally:
         # Close the database connection
