@@ -1,6 +1,6 @@
 polars
 psycopg2
-python-docx
+docxtpl
 python-dotenv
 jupyter
-
+python-docx

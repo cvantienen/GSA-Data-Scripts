@@ -1,9 +1,10 @@
 import os
 import polars as pl
-from docx import Document
+from docxtpl import DocxTemplate
 from test.sampleCompany import get_sample_company
 
-
+# TODO: Fix the report table generated for manufacrures
+#  to work with jinja tags
 class SamplePriceComp:
     def __init__(self, conn, contract_number):
         self.conn = conn
@@ -117,54 +118,55 @@ class SamplePriceComp:
         }
 
     def generate_report(self):
-        """Generate a Word document report based on the analysis results."""
-        # Create a Word document
-        doc = Document()
-        doc.add_heading(f'Sample GSA Contract Analysis', 0)
-        doc.add_heading(f'GSA Contractor: {self.company}')
-        doc.add_heading(f'Contract Number: {self.company.contract_number}', level=1)
-        doc.add_heading(f'Manufacturer: {self.company.url}', level=1)
-        doc.add_heading(f'Manufacturer: {self.company.url}', level=1)
+        """Generate a Word document report based on the analysis results using a template."""
+        # Load the Word template
+        template_path = "src/templates/template_report.docx"  # Update with the actual path to your template
+        doc = DocxTemplate(template_path)
 
+        # Prepare the context with the data to fill in the template
+        context = {
+            'company_name': self.company,
+            'contract_number': self.company.contract_number,
+            'option_end_date': self.company.current_option_period_end_date,
+            'ultimate_end_date': self.company.ultimate_contract_end_date,
+            'below_competitor': self.analysis_results['below_competitor'],
+            'above_competitor': self.analysis_results['above_competitor'],
+            'avg_percent_diff': f"{self.analysis_results['avg_percent_diff']:.2f}%",
+            'max_percent_diff': f"{self.analysis_results['max_percent_diff']:.2f}%",
+            'min_percent_diff': f"{self.analysis_results['min_percent_diff']:.2f}%",
+            'avg_price_deviation': f"${self.analysis_results['avg_price_deviation']:.2f}",
+            'max_price_deviation': f"${self.analysis_results['max_price_deviation']:.2f}",
+            'min_price_deviation': f"${self.analysis_results['min_price_deviation']:.2f}",
+            'count_more_than_1': self.analysis_results['count_more_than_1'],
+            'count_more_than_10': self.analysis_results['count_more_than_10'],
+            'count_more_than_100': self.analysis_results['count_more_than_100'],
+            'manufacture_analysis_df': self.manufacture_analysis_df.to_dicts()  # Convert DataFrame to list of dicts
+        }
 
-        results = self.analysis_results
-        doc.add_paragraph(f"- Number of items below competitor price: {results['below_competitor']}")
-        doc.add_paragraph(f"- Number of items above competitor price: {results['above_competitor']}")
-        doc.add_paragraph(f"- Average percent difference: {results['avg_percent_diff']:.2f}%")
-        doc.add_paragraph(f"- Max percent difference: {results['max_percent_diff']:.2f}%")
-        doc.add_paragraph(f"- Min percent difference: {results['min_percent_diff']:.2f}%")
-        doc.add_paragraph(f"- Average price deviation: ${results['avg_price_deviation']:.2f}")
-        doc.add_paragraph(f"- Max price deviation: ${results['max_price_deviation']:.2f}")
-        doc.add_paragraph(f"- Min price deviation: ${results['min_price_deviation']:.2f}")
-        doc.add_paragraph(f"- Count of items with price deviation more than $1: {results['count_more_than_1']}")
-        doc.add_paragraph(f"- Count of items with price deviation more than $10: {results['count_more_than_10']}")
-        doc.add_paragraph(f"- Count of items with price deviation more than $100: {results['count_more_than_100']}")
+        print(context['manufacture_analysis_df'])
+        # Render the template with the context
+        doc.render(context)
 
-        # Add a section for the manufacturer-specific analysis
-        # Filter out empty columns
-        non_empty_columns = [col for col in self.manufacture_analysis_df.columns if
-                             not self.manufacture_analysis_df[col].is_null().all()]
-
-        filtered_df = self.manufacture_analysis_df.select(non_empty_columns)
-
-        table = doc.add_table(rows=1, cols=len(filtered_df.columns))
-        header_cells = table.rows[0].cells
-        for i, column in enumerate(filtered_df.columns):
-            header_cells[i].text = column
-
-        for row in filtered_df.to_dicts():
-            row_cells = table.add_row().cells
-            for i, (key, value) in enumerate(row.items()):
-                row_cells[i].text = str(value)
-
-
-        # Save the document
-        doc.save(f"SampleReport_{self.company.contract_number}.docx")
-
-        # Construct the full file path
+        # Save the rendered document
         file_name = f"SampleReport_{self.company.contract_number}.docx"
         full_path = os.path.join(self.output_path, file_name)
-
-        # Save the document
         doc.save(full_path)
 
+"""
+        # Add the table after rendering
+        table = doc.add_table(rows=1, cols=2)
+        table.autofit = False
+        table.columns[0].width = Inches(2)
+        table.columns[1].width = Inches(2)
+
+        # Add header row
+        header_cells = table.rows[0].cells
+        header_cells[0].text = "Manufacturer Name"
+        header_cells[1].text = "Average Percent Difference"
+
+        # Add data rows
+        for item in self.manufacture_analysis_df:
+            row_cells = table.add_row().cells
+            row_cells[0].text = item['manufacturer_name']
+            row_cells[1].text = item['average_percent_difference']
+"""
