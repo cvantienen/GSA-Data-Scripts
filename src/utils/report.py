@@ -1,10 +1,10 @@
 import os
 import polars as pl
+from datetime import date
 from docxtpl import DocxTemplate
 from test.sampleCompany import get_sample_company
 
-# TODO: Fix the report table generated for manufacrures
-#  to work with jinja tags
+# TODO: Add more analysis methods, and styling to the report
 class SamplePriceComp:
     def __init__(self, conn, contract_number):
         self.conn = conn
@@ -101,7 +101,19 @@ class SamplePriceComp:
             pl.col("percent_difference").mean().alias("average_percent_difference")
         )
 
-        self.manufacture_analysis_df = manufacturer_percent_diff
+        manufacturer_percent_diff = manufacturer_percent_diff.with_columns(
+            pl.when(pl.col("average_percent_difference") >= 0)
+                .then(pl.lit("More Expensive"))
+                .otherwise(pl.lit("Cheaper"))
+            .alias("comparison_string")
+        )
+
+        formatted_percent_manufacture_diff = manufacturer_percent_diff.with_columns(
+            pl.col("average_percent_difference").abs().map_elements(
+                lambda x: f"{x * 100:.2f}%" if x is not None else "N/A")
+        )
+
+        self.manufacture_analysis_df = formatted_percent_manufacture_diff
 
         self.analysis_results = {
             "below_competitor": below_competitor,
@@ -126,7 +138,12 @@ class SamplePriceComp:
         # Prepare the context with the data to fill in the template
         context = {
             'company_name': self.company,
+            'current_date': date.today(),
             'contract_number': self.company.contract_number,
+"""         'company_uie': self.company.sam_uei,
+            'current_option_period_start_date': self.company.current_option_period_start_date,
+            'current_option_period_end_date': self.company.current_option_period_end_date,
+            'ultimate_end_date': self.company.ultimate_contract_end_date,"""
             'option_end_date': self.company.current_option_period_end_date,
             'ultimate_end_date': self.company.ultimate_contract_end_date,
             'below_competitor': self.analysis_results['below_competitor'],
@@ -143,6 +160,7 @@ class SamplePriceComp:
             'manufacture_analysis_df': self.manufacture_analysis_df.to_dicts()  # Convert DataFrame to list of dicts
         }
 
+        # For testing
         print(context['manufacture_analysis_df'])
         # Render the template with the context
         doc.render(context)
