@@ -1,61 +1,61 @@
-# Polars Project
+### README
 
-This project demonstrates how to use Polars to query a PostgreSQL database, analyze the data, and generate a PDF report. It is designed for quick analysis of small samples of data.
+## Project Overview
+
+This project generates a report based on a sample of 100 random items from a specified contract. The report includes various analyses and is saved as a PDF file.
+
+## Prerequisites
+
+- Docker
+- Docker Compose
+
+## Setup
+
+1. **Build the Docker Image:**
+
+   ```sh
+   docker build -t gsads .
+   ```
+
+2. **Run the Docker Container:**
+
+   ```sh
+   docker run --rm -it -v $(pwd)/output:/app/output gsads
+   ```
+
+## Docker Commands
+
+- **Build the Docker Image:**
+
+  ```sh
+  docker build -t gsads .
+  ```
+
+- **Run the Docker Container:**
+
+  ```sh
+  docker run --rm -it -v $(pwd)/output:/app/output gsads
+  ```
 
 ## Project Structure
 
-```
-
-├── src
-│   ├── main.py          # Entry point of the application
-│   └── utils
-│       └── report.py    # Module for generating PDF reports
-├── .env                 # Environment variables, including database URL
-├── requirements.txt      # Project dependencies
-└── README.md            # Project documentation
-```
-
-## Setup Instructions
-
-1. **Clone the repository:**
-   ```
-   git clone <repository-url>
-   cd polars-project
-   ```
-
-2. **Create a virtual environment (optional but recommended):**
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-   ```
-
-3. **Install the required dependencies:**
-   ```
-   pip install -r requirements.txt
-   ```
-
-4. **Configure the environment variables:**
-   Create a `.env` file in the root directory and add your PostgreSQL database URL:
-   ```
-   DATABASE_URL=your_postgres_database_url
-   ```
+- `src/main.py`: Main script to run the report generation.
+- `src/utils/report.py`: Contains the `SamplePriceComp` class for generating the report.
+- `Dockerfile`: Docker configuration file.
+- `requirements.txt`: Python dependencies.
 
 ## Usage
 
-To run the application, execute the following command:
-```
-python src/main.py
-```
+1. **Build the Docker Image:**
 
-This will connect to the PostgreSQL database, perform the data analysis using Polars, and generate a PDF report.
+   ```sh
+   docker build -t gsads .
+   ```
 
-## Dependencies
+2. **Run the Docker Container:**
 
-This project requires the following Python packages:
-- Polars
-- psycopg2 (PostgreSQL driver)
-- ReportLab (for PDF generation)
+   ```sh
+   docker run --rm -it -v $(pwd)/output:/app/output gsads
+   ```
 
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for more details.
+The generated PDF report will be saved in the `output` directory.
