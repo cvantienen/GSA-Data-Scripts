@@ -24,9 +24,7 @@ def main():
         contract_num = "47QSEA20D003B"
         # Generate different reports
         price_comp = SamplePriceComp(conn,  contract_num)
-        price_comp.get_100_random_products()
-        price_comp.analyze_data()
-        price_comp.generate_report()
+        price_comp.run_sample_report()
 
     finally:
         # Close the database connection
