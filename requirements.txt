@@ -2,5 +2,4 @@ polars
 psycopg2
 docxtpl
 python-dotenv
-jupyter
-python-docx
+pypandoc
