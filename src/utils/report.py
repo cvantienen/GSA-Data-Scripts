@@ -5,7 +5,7 @@ from docxtpl import DocxTemplate
 import subprocess
 from test.sampleCompany import get_sample_company
 
-# TODO: Add more analysis methods, and styling to the report
+# TODO: Finish the SamplePriceComp class Refactor. Need to add the 100 sample items used
 class SamplePriceComp:
     def __init__(self, conn, contract_number):
         self.conn = conn
