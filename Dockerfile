@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-dev \
     libpq-dev \
+    libreoffice \
     && apt-get clean
 
 # Set the working directory inside the container
