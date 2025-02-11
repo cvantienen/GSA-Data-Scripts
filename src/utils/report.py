@@ -7,15 +7,15 @@ from test.sampleCompany import get_sample_company
 
 # TODO: Finish the SamplePriceComp class Refactor. Need to add the 100 sample items used
 class SamplePriceComp:
-    def __init__(self, conn, contract_number):
+    def __init__(self, conn, contract_number, output_path):
         self.conn = conn
         self.company = get_sample_company(contract_number)
-        self.df = None
-        self.manufacture_analysis_df = None
-        self.analysis_results = None
         self.output_path = "/app/output/"
-        
-        # Analysis results as attributes
+        self.query_results_df = None
+        self.reference_items_df = None
+        self.comparison_df = None
+
+        # Analysis results
         self.product_count = None
         self.below_competitor = None
         self.above_competitor = None
@@ -28,59 +28,29 @@ class SamplePriceComp:
         self.deviate_more_than_1 = None
         self.deviate_more_than_10 = None
         self.deviate_more_than_100 = None
+        self.manufacture_avg_diff = None
 
 
-    def get_100_random_products(self):
-        """ Get 100 random items from the specific contract
-            from the database and load it into a DataFrame."""
-        query = f"""
-        WITH reference_items AS (
-            SELECT *
-            FROM gsa_product_extract_jan2024
-            WHERE contract_number =  '{self.company.contract_number}'
-            ORDER BY RANDOM()  -- Randomize the selection of the 100 items
-            LIMIT 100
-        ),
-        competitor_items AS (
-            -- Get all items with the same manufacturer_part_number from different contracts
-            SELECT *
-            FROM gsa_product_extract_jan2024 gi
-            WHERE gi.contract_number != '{self.company.contract_number}'  -- Ensure items are from different contracts
-            AND gi.manufacturer_part_number IN (SELECT manufacturer_part_number FROM reference_items)
-        )
-        -- Combine reference items with their matches
-        SELECT ref.*, 'reference' AS source
-        FROM reference_items ref
-        UNION ALL
-        SELECT comp.*, 'competitor' AS source
-        FROM competitor_items comp
-        ORDER BY jprod_id;
+    def get_sample_products(self, query_file='src/querys/price_comp_random_sample.txt'):
+        """Get 100 random items from the specific contract, along with all
+          the matching items from competitors found from the database
+           and return a DataFrame with the results.
         """
-        self.df = pl.read_database(query, self.conn)
-        self.df = self.df.with_columns(pl.col("price").cast(pl.Float64))
+        # Load the SQL query from a file
+        sql_query = query_file
+        with open(sql_query, 'r') as file:
+            query = file.read()
 
-        print(f"Loaded {self.product_count} products for analysis.")
+        # Replace the placeholder with the actual contract number & Query DB
+        query = query.format(contract_number=self.company.contract_number)
 
-    def analyze_data(self):
-        """Analyze the Sample DataFrame and store the results."""
-        df = self.df
-
-        # Calculate the comp average price for each manufacturer_part_number
-        # for competitor products only
-        comp_average_price = df.filter(pl.col("source") == "competitor").group_by("manufacturer_part_number").agg(
-            pl.col("price").mean().alias("average_price_on_gsa")
+        # Cast the price column to float
+        self.query_results_df = pl.read_database(query, self.conn).with_columns(
+            pl.col("price").cast(pl.Float64)
         )
-
-        # Calculate the standard deviation of prices for each manufacturer_part_number
-        price_deviation = df.group_by("manufacturer_part_number").agg(
-            pl.col("price").std().alias("price_deviation")
-        )
-
-        # Combine the average price and price deviation into a single DataFrame
-        price_comparison = comp_average_price.join(price_deviation, on="manufacturer_part_number", how="left")
 
         # Select the columns to include in the final report from the original contractors items
-        selected_columns = df.select([
+        self.reference_items_df = self.query_results_df.select([
             "contractor_name",
             "contract_number",
             "manufacturer_part_number",
@@ -88,37 +58,64 @@ class SamplePriceComp:
             "product_name",
             "price",
         ]).filter(pl.col("contract_number") == self.company.contract_number)
+        return
 
-        # Combine the selected columns with the calculated columns
-        combined_df = selected_columns.join(price_comparison, on="manufacturer_part_number", how="left")
-
-        # Calculate the percent difference from the Contractors price vs the average price on GSA
-        combined_df = combined_df.with_columns(
-            ((pl.col("price") - pl.col("average_price_on_gsa")) / pl.col("average_price_on_gsa")).alias("percent_difference")
+    def calculate_comparison(self):
+        """Calculate the average price for competitor products and the standard deviation of prices for each product.
+            Return a DataFrame with the results.
+        """
+        # Get average for competitor products only
+        comp_average_price = self.query_results_df.filter(pl.col("source") == "competitor").group_by("manufacturer_part_number").agg(
+            pl.col("price").mean().alias("average_price_on_gsa")
+        )
+        # Calculate the standard deviation of prices for each manufacturer_part_number
+        price_deviation = self.query_results_df.group_by("manufacturer_part_number").agg(
+            pl.col("price").std().alias("price_deviation")
         )
 
+        # Combine the average price and price deviation into a single DataFrame
+        average_and_deviation = comp_average_price.join(price_deviation, on="manufacturer_part_number", how="left")
+
+        # Combine the price comparison DataFrame with the reference items DataFrame
+        reference_items_with_comps = self.reference_items_df.join(average_and_deviation, on="manufacturer_part_number", how="left")
+
+        # Calculate the percent difference from the Contractors price vs the average price on GSA
+        self.comparison_df = reference_items_with_comps.with_columns(
+            ((pl.col("price") - pl.col("average_price_on_gsa")) / pl.col("average_price_on_gsa")).alias(
+                "percent_difference")
+        )
+        return
+
+    def store_analysis_statements(self):
+        """Store the analysis results in the class attributes."""
         # Calculate general statements based on the Price % difference From GSA Average
-        self.below_competitor = combined_df.filter(pl.col("percent_difference") < 0).shape[0]
-        self.above_competitor = combined_df.filter(pl.col("percent_difference") > 0).shape[0]
-        self.avg_percent_diff = combined_df.select(pl.col("percent_difference").mean()).item()
-        self.max_percent_diff = combined_df.select(pl.col("percent_difference").max()).item()
-        self.min_percent_diff = combined_df.select(pl.col("percent_difference").min()).item()
+        self.below_competitor = self.comparison_df.filter(pl.col("percent_difference") < 0).shape[0]
+        self.above_competitor = self.comparison_df.filter(pl.col("percent_difference") > 0).shape[0]
+        self.avg_percent_diff = self.comparison_df.select(pl.col("percent_difference").mean()).item()
+        self.max_percent_diff = self.comparison_df.select(pl.col("percent_difference").max()).item()
+        self.min_percent_diff = self.comparison_df.select(pl.col("percent_difference").min()).item()
 
         # Calculate Deviation
-        self.avg_price_deviation = combined_df.select(pl.col("price_deviation").mean()).item()
-        self.max_price_deviation = combined_df.select(pl.col("price_deviation").max()).item()
-        self.min_price_deviation = combined_df.select(pl.col("price_deviation").min()).item()
+        self.avg_price_deviation = self.comparison_df.select(pl.col("price_deviation").mean()).item()
+        self.max_price_deviation = self.comparison_df.select(pl.col("price_deviation").max()).item()
+        self.min_price_deviation = self.comparison_df.select(pl.col("price_deviation").min()).item()
 
         # Count items that price deviation is more than $1, $10, and $100
-        self.deviate_more_than_1 = combined_df.filter(pl.col("price_deviation") > 1).shape[0]
-        self.deviate_more_than_10 = combined_df.filter(pl.col("price_deviation") > 10).shape[0]
-        self.deviate_more_than_100 = combined_df.filter(pl.col("price_deviation") > 100).shape[0]
+        self.deviate_more_than_1 = self.comparison_df.filter(pl.col("price_deviation") > 1).shape[0]
+        self.deviate_more_than_10 = self.comparison_df.filter(pl.col("price_deviation") > 10).shape[0]
+        self.deviate_more_than_100 = self.comparison_df.filter(pl.col("price_deviation") > 100).shape[0]
+        return
+
+    def calculate_manufacture_average_diff(self, combined_df):
+        """ Calculate the average percent difference for pricing based on
+            manufacturer and classify as 'More Expensive' or 'Cheaper'.
+        """
 
         # Group by manufacturer_name and calculate the average percent difference
         manufacturer_percent_diff = combined_df.group_by("manufacturer_name").agg(
             pl.col("percent_difference").mean().alias("average_percent_difference")
         )
-
+        # Add Column to Classify average percent difference
         manufacturer_percent_diff = manufacturer_percent_diff.with_columns(
             pl.when(pl.col("average_percent_difference") >= 0)
                 .then(pl.lit("More Expensive"))
@@ -126,14 +123,13 @@ class SamplePriceComp:
             .alias("comparison_string")
         )
 
-        formatted_percent_manufacture_diff = manufacturer_percent_diff.with_columns(
+        # Store the results in the class attribute, formatted as %
+        self.manufacture_avg_diff = manufacturer_percent_diff.with_columns(
             pl.col("average_percent_difference").abs().map_elements(
                 lambda x: f"{x * 100:.2f}%" if x is not None else "N/A",
                 return_dtype=pl.Utf8
             )
         )
-
-        self.manufacture_analysis_df = formatted_percent_manufacture_diff
 
 
     def generate_report(self):
@@ -162,7 +158,7 @@ class SamplePriceComp:
             'deviate_more_than_1': self.deviate_more_than_1,
             'deviate_more_than_10': self.deviate_more_than_10,
             'deviate_more_than_100': self.deviate_more_than_100,
-            'manufacture_analysis_df': self.manufacture_analysis_df.to_dicts()  # Convert DataFrame to list of dicts
+            'manufacture_analysis_df': self.manufacture_avg_diff.to_dicts()  # Convert DataFrame to list of dicts
         }
 
         # Render the template with the context
@@ -200,35 +196,6 @@ class SamplePriceComp:
         return pdf_path
 
     def run_sample_report(self):
-        self.get_100_random_products()
+        self.get_sample_products()
         self.analyze_data()
         self.generate_report()
-
-"""    def docx_to_pdf(self, word_file_path):
-
-        # Convert the Word document file path to the PDF file path
-        pdf_file_name = f"GSA_Report_{self.company.contract_number}.pdf"
-        pdf_file_path = os.path.join(self.output_path, pdf_file_name)
-
-        return pdf_file_path
-"""
-
-
-"""
-        # Add the table after rendering
-        table = doc.add_table(rows=1, cols=2)
-        table.autofit = False
-        table.columns[0].width = Inches(2)
-        table.columns[1].width = Inches(2)
-
-        # Add header row
-        header_cells = table.rows[0].cells
-        header_cells[0].text = "Manufacturer Name"
-        header_cells[1].text = "Average Percent Difference"
-
-        # Add data rows
-        for item in self.manufacture_analysis_df:
-            row_cells = table.add_row().cells
-            row_cells[0].text = item['manufacturer_name']
-            row_cells[1].text = item['average_percent_difference']
-"""
