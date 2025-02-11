@@ -1,0 +1,21 @@
+WITH reference_items AS (
+            SELECT *
+            FROM gsa_product_extract_jan2024
+            WHERE contract_number =  '{self.company.contract_number}'
+            ORDER BY RANDOM()  -- Randomize the selection of the 100 items
+            LIMIT 100
+        ),
+        competitor_items AS (
+            -- Get all items with the same manufacturer_part_number from different contracts
+            SELECT *
+            FROM gsa_product_extract_jan2024 gi
+            WHERE gi.contract_number != '{self.company.contract_number}'  -- Ensure items are from different contracts
+            AND gi.manufacturer_part_number IN (SELECT manufacturer_part_number FROM reference_items)
+        )
+        -- Combine reference items with their matches
+        SELECT ref.*, 'reference' AS source
+        FROM reference_items ref
+        UNION ALL
+        SELECT comp.*, 'competitor' AS source
+        FROM competitor_items comp
+        ORDER BY jprod_id;
