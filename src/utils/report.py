@@ -5,17 +5,21 @@ from docxtpl import DocxTemplate
 import subprocess
 from test.sampleCompany import get_sample_company
 
-# TODO: Finish the SamplePriceComp class Refactor. Need to add the 100 sample items used
+# TODO: Finish the SamplePriceComp class Refactor.
+# TODO: Add method to return comparison_df in word doc
+
 class SamplePriceComp:
     def __init__(self, conn, contract_number, output_path):
         self.conn = conn
         self.company = get_sample_company(contract_number)
         self.output_path = "/app/output/"
+
+        # DataFrames to store the query results and comparison data
         self.query_results_df = None
         self.reference_items_df = None
         self.comparison_df = None
 
-        # Analysis results
+        # TODO: change analysis results to dictionary
         self.product_count = None
         self.below_competitor = None
         self.above_competitor = None
