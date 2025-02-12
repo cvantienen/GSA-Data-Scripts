@@ -46,16 +46,10 @@ This project generates a report based on a sample of 100 random items from a spe
 
 ## Usage
 
-1. **Build the Docker Image:**
+ **Run the Docker Container:**
 
    ```sh
-   docker build -t gsads .
-   ```
-
-2. **Run the Docker Container:**
-
-   ```sh
-   docker run --rm -it -v $(pwd)/output:/app/output gsads
+   docker build -t gsads . && docker run --rm -it -v $(pwd)/output:/app/output gsads
    ```
 
 The generated PDF report will be saved in the `output` directory.

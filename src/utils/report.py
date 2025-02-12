@@ -9,7 +9,7 @@ from test.sampleCompany import get_sample_company
 # TODO: Add method to return comparison_df in word doc
 
 class SamplePriceComp:
-    def __init__(self, conn, contract_number, output_path):
+    def __init__(self, conn, contract_number):
         self.conn = conn
         self.company = get_sample_company(contract_number)
         self.output_path = "/app/output/"
@@ -34,6 +34,13 @@ class SamplePriceComp:
         self.deviate_more_than_100 = None
         self.manufacture_avg_diff = None
 
+    def run_sample_report(self):
+        self.get_sample_products()
+        self.calculate_comparison()
+        self.store_analysis_statements()
+        self.calculate_manufacture_average_diff(self.comparison_df)
+        self.generate_report()
+
 
     def get_sample_products(self, query_file='src/querys/price_comp_random_sample.txt'):
         """Get 100 random items from the specific contract, along with all
@@ -46,7 +53,7 @@ class SamplePriceComp:
             query = file.read()
 
         # Replace the placeholder with the actual contract number & Query DB
-        query = query.format(contract_number=self.company.contract_number)
+        query = query.replace("{contract_number}", self.company.contract_number)
 
         # Cast the price column to float
         self.query_results_df = pl.read_database(query, self.conn).with_columns(
@@ -135,7 +142,6 @@ class SamplePriceComp:
             )
         )
 
-
     def generate_report(self):
         """Generate a Word document report based on the analysis results using a template."""
         # Load the Word template
@@ -147,22 +153,22 @@ class SamplePriceComp:
             'company_name': self.company,
             'current_date': date.today(),
             'contract_number': self.company.contract_number,
-            'sam_uie': self.company.sam_uei,
-            'option_end_date': self.company.current_option_period_end_date,
-            'ultimate_end_date': self.company.ultimate_contract_end_date,
-            'product_count': self.product_count,
-            'below_competitor': self.below_competitor,
-            'above_competitor': self.above_competitor,
-            'avg_percent_diff': f"{self.avg_percent_diff:.2f}%",
-            'max_percent_diff': f"{self.max_percent_diff:.2f}%",
-            'min_percent_diff': f"{self.min_percent_diff:.2f}%",
-            'avg_price_deviation': f"${self.avg_price_deviation:.2f}",
-            'max_price_deviation': f"${self.max_price_deviation:.2f}",
-            'min_price_deviation': f"${self.min_price_deviation:.2f}",
-            'deviate_more_than_1': self.deviate_more_than_1,
-            'deviate_more_than_10': self.deviate_more_than_10,
-            'deviate_more_than_100': self.deviate_more_than_100,
-            'manufacture_analysis_df': self.manufacture_avg_diff.to_dicts()  # Convert DataFrame to list of dicts
+            'sam_uie': self.company.sam_uei or "N/A",
+            'option_end_date': self.company.current_option_period_end_date or "N/A",
+            'ultimate_end_date': self.company.ultimate_contract_end_date or "N/A",
+            'product_count': self.product_count or 0,
+            'below_competitor': self.below_competitor or 0,
+            'above_competitor': self.above_competitor or 0,
+            'avg_percent_diff': f"{self.avg_percent_diff:.2f}%" if self.avg_percent_diff is not None else "N/A",
+            'max_percent_diff': f"{self.max_percent_diff:.2f}%" if self.max_percent_diff is not None else "N/A",
+            'min_percent_diff': f"{self.min_percent_diff:.2f}%" if self.min_percent_diff is not None else "N/A",
+            'avg_price_deviation': f"${self.avg_price_deviation:.2f}" if self.avg_price_deviation is not None else "N/A",
+            'max_price_deviation': f"${self.max_price_deviation:.2f}" if self.max_price_deviation is not None else "N/A",
+            'min_price_deviation': f"${self.min_price_deviation:.2f}" if self.min_price_deviation is not None else "N/A",
+            'deviate_more_than_1': self.deviate_more_than_1 or 0,
+            'deviate_more_than_10': self.deviate_more_than_10 or 0,
+            'deviate_more_than_100': self.deviate_more_than_100 or 0,
+            'manufacture_analysis_df': self.manufacture_avg_diff.to_dicts() if self.manufacture_avg_diff is not None else []
         }
 
         # Render the template with the context
@@ -199,7 +205,4 @@ class SamplePriceComp:
         # Return the PDF file path
         return pdf_path
 
-    def run_sample_report(self):
-        self.get_sample_products()
-        self.analyze_data()
-        self.generate_report()
+    
