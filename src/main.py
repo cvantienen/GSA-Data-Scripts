@@ -25,7 +25,8 @@ def main():
         # Generate different reports
         price_comp = SamplePriceComp(conn,  contract_num)
         price_comp.run_sample_report()
-
+        print(price_comp.comparison_df)
+        
     finally:
         # Close the database connection
         conn.close()

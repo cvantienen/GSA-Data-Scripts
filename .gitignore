@@ -135,6 +135,6 @@ dmypy.json
 cython_debug/
 
 # Output directory
-/output
+
 src/utils/__pycache__/config.cpython-312.pyc
 output/path.csv

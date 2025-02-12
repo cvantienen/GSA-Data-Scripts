@@ -1,7 +1,7 @@
 WITH reference_items AS (
             SELECT *
             FROM gsa_product_extract_jan2024
-            WHERE contract_number =  '{self.company.contract_number}'
+            WHERE contract_number =  '{contract_number}'
             ORDER BY RANDOM()  -- Randomize the selection of the 100 items
             LIMIT 100
         ),
