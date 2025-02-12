@@ -9,7 +9,7 @@ WITH reference_items AS (
             -- Get all items with the same manufacturer_part_number from different contracts
             SELECT *
             FROM gsa_product_extract_jan2024 gi
-            WHERE gi.contract_number != '{self.company.contract_number}'  -- Ensure items are from different contracts
+            WHERE gi.contract_number != '{contract_number}'  -- Ensure items are from different contracts
             AND gi.manufacturer_part_number IN (SELECT manufacturer_part_number FROM reference_items)
         )
         -- Combine reference items with their matches
