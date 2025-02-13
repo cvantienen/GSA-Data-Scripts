@@ -221,6 +221,8 @@ class SamplePriceComp:
             )
         )
 
+
+
         # Convert the DataFrame to dictionary
         manufacture_average_difference = (man_avg_comp_formatted.to_dicts()) if man_avg_comp_formatted is not None else []
 
@@ -273,22 +275,23 @@ class SamplePriceComp:
         return pdf_path
 
 
-
 class DataFrameCleaner:
     """A class of just static methods to clean the DataFrame columns and format the data
     """
     def __init__(self):
         pass
-
+    # TODO: Fix to be a loop
     @staticmethod
-    def format_percent_columns(self, df, column_name):
+    def format_percent_columns(self, df, column_list):
         # Format the percent_difference column to limit decimal places to 2
-        formatted_df = df.with_columns(
-            pl.col(column_name).map_elements(
-                lambda x: f"{x * 100:.2f}%" if x is not None else "N/A",
-                return_dtype=pl.Utf8
+        for column in column_list:
+            formatted_df = df.with_columns(
+                pl.col(column_name).map_elements(
+                    lambda x: f"{x * 100:.2f}%" if x is not None else "N/A",
+                    return_dtype=pl.Utf8
+                )
             )
-        )
+
         return formatted_df
 
     @staticmethod
