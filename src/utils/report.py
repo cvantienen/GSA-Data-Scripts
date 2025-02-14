@@ -5,6 +5,52 @@ from docxtpl import DocxTemplate
 import subprocess
 from test.sampleCompany import get_sample_company
 
+class DataFrameCleaner:
+    """A class of just static methods to clean the DataFrame columns and format the data."""
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def format_percent_columns(df, column_list):
+        # Format the percent_difference column to limit decimal places to 2
+        for column in column_list:
+            df = df.with_columns(
+                pl.col(column).map_elements(
+                    lambda x: f"{x * 100:.2f}%" if x is not None else "N/A",
+                    return_dtype=pl.Utf8
+                )
+            )
+            return df
+
+    @staticmethod
+    def format_price_columns(df, column_list):
+        # Format the percent_difference column to limit decimal places to 2
+        for column in column_list:
+            df = df.with_columns(
+                pl.col(column).map_elements(
+                    lambda x: f"${x:.2f}" if x is not None else "N/A",
+                    return_dtype=pl.Utf8
+                )
+            )
+            return df
+
+    @staticmethod
+    def format_percent_dict(d, keys):
+        """Format the value of a dictionary key as a percentage."""
+        for key in keys:
+            if d[key] is not None:
+                d[key] = "{:.2%}".format(d[key])
+                return d
+
+    @staticmethod
+    def format_money_dict(d, keys):
+        """Format the value of a dictionary key as money."""
+        for key in keys:
+            if d[key] is not None:
+                d[key] = "${:.2f}".format(d[key])
+                return d
+
+dff = DataFrameCleaner()
 
 # TODO: Add the DataFrameCleaner class to the SamplePriceComp class.
 class SamplePriceComp:
@@ -77,24 +123,29 @@ class SamplePriceComp:
     def __init__(self, conn, contract_number):
         self.conn = conn
         self.company = get_sample_company(contract_number)
+        if not self.company:
+            raise ValueError(f"Company with contract number {contract_number} not found.")
+
         self.output_path = "/app/output/"
 
         # DataFrames to store the query results and comparison data
         self.query_results_df = None
         self.contractor_items_df = None
         self.comparison_df = None
+        self.manufacture_avg_diff_df = None # Manufacture Average Difference
 
         # Analysis results Dictionary
         self.analysis_results = {}
 
+
     def run_sample_report(self):
         self.get_contractor_info()
-        self.check_expiration_dates()
         self.get_sample_products()
         self.get_contractor_items()
         self.calculate_comparison_df()
         self.comparison_statements()
         self.calculate_manufacture_average_diff()
+        self.format_analysis_results()
         self.generate_pdf()
 
     def get_contractor_info(self):
@@ -103,8 +154,10 @@ class SamplePriceComp:
         self.analysis_results['current_date'] = date.today()
         self.analysis_results['contract_number'] = self.company.contract_number
         self.analysis_results['sam_uie'] = self.company.sam_uei or "N/A"
+        self.check_expiration_dates()
 
     def check_expiration_dates(self):
+        """Check and format the expiration dates, and calculate days until they expire."""
         option_end_date = self.company.current_option_period_end_date
         ultimate_end_date = self.company.ultimate_contract_end_date
 
@@ -157,19 +210,17 @@ class SamplePriceComp:
         """Calculate the average price for competitor products and the standard deviation of prices for each product.
             Return a DataFrame with the results.
         """
-        # Get average for competitor products only
+        # average price for competitor products found in the query results
+        # (excluding the contractor's items from average calculation)
         comp_average_price = self.query_results_df.filter(pl.col("source") == "competitor").group_by("manufacturer_part_number").agg(
             pl.col("price").mean().alias("average_price_on_gsa")
         )
-        # Calculate the standard deviation of prices for each manufacturer_part_number
+        # standard deviation of prices for each manufacturer_part_number
         price_deviation = self.query_results_df.group_by("manufacturer_part_number").agg(
             pl.col("price").std().alias("price_deviation")
         )
-
         # Combine the average price and price deviation into a single DataFrame
         average_and_deviation = comp_average_price.join(price_deviation, on="manufacturer_part_number", how="left")
-
-        # Combine the price comparison DataFrame with the reference items DataFrame
         contractor_items_with_comps = self.contractor_items_df.join(average_and_deviation, on="manufacturer_part_number", how="left")
 
         # Calculate the percent difference from the Contractors price vs the average price on GSA
@@ -177,11 +228,6 @@ class SamplePriceComp:
             ((pl.col("price") - pl.col("average_price_on_gsa")) / pl.col("average_price_on_gsa")).alias(
                 "percent_difference")
         )
-
-        # Store the comparison items in the analysis results dictionary
-        self.analysis_results['comparison_items'] = (self.comparison_df.to_dicts()) if self.comparison_df is not None else []
-
-        return
 
     def comparison_statements(self):
         """Store the analysis results in the class attributes."""
@@ -207,29 +253,32 @@ class SamplePriceComp:
             pl.col("percent_difference").mean().alias("average_percent_difference")
         )
         # Add Column to Classify average percent difference
-        man_percent_diff_classify = man_avg_percent_diff.with_columns(
+        self.manufacture_avg_diff_df = man_avg_percent_diff.with_columns(
             pl.when(pl.col("average_percent_difference") >= 0)
             .then(pl.lit("Higher Price on GSA"))
             .otherwise(pl.lit("Lower Price on GSA"))
             .alias("comparison_string")
         )
-        # Store the results in the class attribute, formatted as %
-        man_avg_comp_formatted = man_percent_diff_classify.with_columns(
-            pl.col("average_percent_difference").abs().map_elements(
-                lambda x: f"{x * 100:.2f}%" if x is not None else "N/A",
-                return_dtype=pl.Utf8
-            )
-        )
 
+    def format_analysis_results(self):
+        # Format the comparison items DataFrame columns and store the results in the analysis_results dictionary
+        formatted_df = dff.format_percent_columns(self.comparison_df, ["percent_difference"])
+        formatted_df = dff.format_price_columns(formatted_df,
+                                                      ["price", "average_price_on_gsa", "price_deviation"])
+        self.analysis_results['comparison_items'] = (
+            formatted_df.to_dicts()) if formatted_df is not None else []
 
-
-        # Convert the DataFrame to dictionary
-        manufacture_average_difference = (man_avg_comp_formatted.to_dicts()) if man_avg_comp_formatted is not None else []
-
+        # Format and store the manufacturer average difference in the analysis_results dictionary
+        self.manufacture_avg_diff_df = dff.format_percent_columns(self.manufacture_avg_diff_df, ["average_percent_difference"])
         # Store the results in the dictionary attribute
-        self.analysis_results['manufacture_avg_diff'] = manufacture_average_difference
+        self.analysis_results['manufacture_avg_diff'] =(
+            self.manufacture_avg_diff_df.to_dicts()) if self.manufacture_avg_diff_df is not None else []
 
-        return
+        # Format remaining analysis_results keys
+        money_keys = ['avg_price_deviation', 'max_price_deviation', 'min_price_deviation', ]
+        self.analysis_results = dff.format_money_dict(self.analysis_results, money_keys)  # Format the money keys
+        percent_keys = ['avg_percent_diff', 'max_percent_diff', 'min_percent_diff']
+        self.analysis_results = dff.format_percent_dict(self.analysis_results, percent_keys)  # Format the percent keys
 
     def generate_pdf(self):
         """Generate a Word document report based on the analysis results using a template.
@@ -273,34 +322,3 @@ class SamplePriceComp:
 
         # Return the PDF file path
         return pdf_path
-
-
-class DataFrameCleaner:
-    """A class of just static methods to clean the DataFrame columns and format the data
-    """
-    def __init__(self):
-        pass
-    # TODO: Fix to be a loop
-    @staticmethod
-    def format_percent_columns(self, df, column_list):
-        # Format the percent_difference column to limit decimal places to 2
-        for column in column_list:
-            formatted_df = df.with_columns(
-                pl.col(column_name).map_elements(
-                    lambda x: f"{x * 100:.2f}%" if x is not None else "N/A",
-                    return_dtype=pl.Utf8
-                )
-            )
-
-        return formatted_df
-
-    @staticmethod
-    def format_price_columns(self, df, column_name):
-        # Format the price columns to limit decimal places to 2
-        formatted_df = df.with_columns(
-            pl.col(column_name).map_elements(
-                lambda x: f"${x:.2f}" if x is not None else "N/A",
-                return_dtype=pl.Utf8
-            )
-        )
-        return formatted_df
