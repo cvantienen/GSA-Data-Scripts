@@ -51,9 +51,9 @@ class Company:
     def __str__(self):
         return self.vendor or "Unknown Vendor"
 
-def get_sample_company(contract_number):
+def get_sample_company(contract_number: str) -> Company:
     # 10G Federal Supply
-    47QSEA20D003B = Company(
+    company_full = Company(
         large_category="Facilities",
         sub_category="Structures",
         source="MAS".strip(),
@@ -98,8 +98,9 @@ def get_sample_company(contract_number):
         price_list="https://www.gsaelibrary.gsa.gov/ElibMain/advRedirect.do?contract=47QSMS24D00AP&sin=238160&app=cat",
         view_catalog="https://www.gsaadvantage.gov/ref_text/47QSMS24D00AP/47QSMS24D00AP_online.htm"
     )
-    # ABSOLUTE STORAGE, LLC
-    GS-07F-9481S = Company(
+    
+
+    company_full_2 = Company(
         large_category="Facilities",
         sub_category="Structures",
         source="MAS".strip(),
@@ -144,54 +145,9 @@ def get_sample_company(contract_number):
         price_list="https://www.gsaadvantage.gov/ref_text/GS07F9481S/GS07F9481S_online.htm",
         view_catalog="https://www.gsaelibrary.gsa.gov/ElibMain/advRedirect.do?contract=GS-07F-9481S&sin=238160&app=cat"
     )
-    # ACE ROOF COATINGS, INC (GS-07F-177AA)
-    GS-07F-177AA = Company(
-        large_category="Facilities",
-        sub_category="Structures",
-        source="MAS".strip(),
-        category="238160",
-        vendor="ACE ROOF COATINGS, INC",
-        contract_number="GS-07F-177AA".strip(),
-        closed_for_new_award="",
-        address1="4821 GRISHAM DR",
-        address2="",
-        city="ROWLETT",
-        state="TX",
-        zip="75088-3950",
-        country="",
-        phone="972-864-0240",
-        email="emendel@arccoat.com",
-        url="http://WWW.ARCHITECTURALROOFCOAT.COM",
-        current_option_period_end_date=date(2028, 3, 14),
-        ultimate_contract_end_date=date(2033, 3, 14),
-        sam_uei="HC97VH2FHKB8",
-        small_business="s",
-        other_than_small_business="",
-        woman_owned="",
-        women_owned_wosb="",
-        women_owned_edwosb="",
-        veteran_owned="",
-        service_disabled_veteran_owned="",
-        small_disadvantaged="",
-        a8a="",
-        a8a_sole_source_pool="",
-        a8a_sole_source_exit_date=None,
-        hub_zone="",
-        tribally_owned_firm="",
-        american_indian_owned="",
-        alaskan_native_corporation_owned_firm="",
-        native_hawaiian_organization_owned_firm="",
-        a8a_joint_venture_eligible="",
-        women_owned_joint_venture_eligible="",
-        service_disabled_veteran_owned_joint_venture_eligible="",
-        hubzone_joint_venture_eligible="",
-        state_local="",
-        t_and_cs="",
-        price_list="",
-        view_catalog="https://www.gsaelibrary.gsa.gov/ElibMain/advRedirect.do?contract=GS-07F-177AA&sin=238160&app=cat"
-    ),
-
-    GS-07F-177AA = Company(
+    
+    # company_under_100
+    company_under_100 = Company(
         large_category="Facilities",
         sub_category="Structures",
         source="MAS".strip(),
@@ -237,13 +193,13 @@ def get_sample_company(contract_number):
         view_catalog="https://www.gsaelibrary.gsa.gov/ElibMain/advRedirect.do?contract=GS-07F-177AA&sin=238160&app=cat"
     )
 
-    47QTCA22D00BC = Company(
+    company_labor = Company(
         large_category="Facilities",
         sub_category="Services",
         source="MAS".strip(),
         category="238160",
-        vendor="ACE ROOF COATINGS, INC",
-        contract_number="GS-07F-177AA".strip(),
+        vendor="CORPORATE EVENTS AND OCCASIONS, LLC",
+        contract_number="47QRAA22D000T".strip(),
         closed_for_new_award="",
         address1="4821 GRISHAM DR",
         address2="",
@@ -282,52 +238,16 @@ def get_sample_company(contract_number):
         price_list="",
         view_catalog="https://www.gsaelibrary.gsa.gov/ElibMain/advRedirect.do?contract=GS-07F-177AA&sin=238160&app=cat"
     )
+    
+    company_list = [company_full, company_full_2, company_under_100, company_labor]
 
-    47QRAA22D000T = Company(
-        large_category="Facilities",
-        sub_category="Services",
-        source="MAS".strip(),
-        category="238160",
-        vendor="ACE ROOF COATINGS, INC",
-        contract_number="GS-07F-177AA".strip(),
-        closed_for_new_award="",
-        address1="4821 GRISHAM DR",
-        address2="",
-        city="ROWLETT",
-        state="TX",
-        zip="75088-3950",
-        country="",
-        phone="972-864-0240",
-        email="emendel@arccoat.com",
-        url="http://WWW.ARCHITECTURALROOFCOAT.COM",
-        current_option_period_end_date=date(2028, 3, 14),
-        ultimate_contract_end_date=date(2033, 3, 14),
-        sam_uei="HC97VH2FHKB8",
-        small_business="s",
-        other_than_small_business="",
-        woman_owned="",
-        women_owned_wosb="",
-        women_owned_edwosb="",
-        veteran_owned="",
-        service_disabled_veteran_owned="",
-        small_disadvantaged="",
-        a8a="",
-        a8a_sole_source_pool="",
-        a8a_sole_source_exit_date=None,
-        hub_zone="",
-        tribally_owned_firm="",
-        american_indian_owned="",
-        alaskan_native_corporation_owned_firm="",
-        native_hawaiian_organization_owned_firm="",
-        a8a_joint_venture_eligible="",
-        women_owned_joint_venture_eligible="",
-        service_disabled_veteran_owned_joint_venture_eligible="",
-        hubzone_joint_venture_eligible="",
-        state_local="",
-        t_and_cs="",
-        price_list="",
-        view_catalog="https://www.gsaelibrary.gsa.gov/ElibMain/advRedirect.do?contract=GS-07F-177AA&sin=238160&app=cat"
-    )
+    for company in company_list:
+        if company.contract_number != contract_number:
+            continue
+        else:
+            print(f"Company Found: {company.vendor}")
+            return company
 
-    sample_company = contract_number
-    return sample_company
+
+
+
