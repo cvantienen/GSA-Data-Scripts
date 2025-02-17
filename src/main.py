@@ -22,7 +22,7 @@ def main():
     
     try:
         # Generate different reports
-        price_comp = SamplePriceComp(conn, 'GS-07F-177AA')
+        price_comp = SamplePriceComp(conn, '47QSEA20D003B')
         price_comp.run_sample_report()
 
     finally:

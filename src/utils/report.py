@@ -34,21 +34,6 @@ class DataFrameCleaner:
             )
             return df
 
-    @staticmethod
-    def format_percent_dict(d, keys):
-        """Format the value of a dictionary key as a percentage."""
-        for key in keys:
-            if d[key] is not None:
-                d[key] = "{:.2%}".format(d[key])
-                return d
-
-    @staticmethod
-    def format_money_dict(d, keys):
-        """Format the value of a dictionary key as money."""
-        for key in keys:
-            if d[key] is not None:
-                d[key] = "${:.2f}".format(d[key])
-                return d
 
 dff = DataFrameCleaner()
 
@@ -145,7 +130,7 @@ class SamplePriceComp:
         self.calculate_comparison_df()
         self.comparison_statements()
         self.calculate_manufacture_average_diff()
-        self.format_analysis_results()
+        self.analysis_results_dict()
         self.generate_pdf()
 
     def get_contractor_info(self):
@@ -192,6 +177,9 @@ class SamplePriceComp:
         self.query_results_df = pl.read_database(query, self.conn).with_columns(
             pl.col("price").cast(pl.Float64)
         )
+        # get the number of items in the query results
+        self.analysis_results['product_count'] = self.query_results_df.shape[0] - 100
+
         return
 
     def get_contractor_items(self):
@@ -234,12 +222,12 @@ class SamplePriceComp:
         # Calculate general statements based on the Price % difference From GSA Average
         self.analysis_results['below_competitor'] = self.comparison_df.filter(pl.col("percent_difference") < 0).shape[0]
         self.analysis_results['above_competitor'] = self.comparison_df.filter(pl.col("percent_difference") > 0).shape[0]
-        self.analysis_results['avg_percent_diff'] = self.comparison_df.select(pl.col("percent_difference").mean()).item()
-        self.analysis_results['max_percent_diff'] = self.comparison_df.select(pl.col("percent_difference").max()).item()
-        self.analysis_results['min_percent_diff'] = self.comparison_df.select(pl.col("percent_difference").min()).item()
-        self.analysis_results['avg_price_deviation'] = self.comparison_df.select(pl.col("price_deviation").mean()).item()
-        self.analysis_results['max_price_deviation'] = self.comparison_df.select(pl.col("price_deviation").max()).item()
-        self.analysis_results['min_price_deviation'] = self.comparison_df.select(pl.col("price_deviation").min()).item()
+        self.analysis_results['avg_percent_diff'] = f"{self.comparison_df.select(pl.col('percent_difference').mean()).item() * 100:.2f}%"
+        self.analysis_results['max_percent_diff'] = f"{self.comparison_df.select(pl.col('percent_difference').max()).item() * 100:.2f}%"
+        self.analysis_results['min_percent_diff'] = f"{self.comparison_df.select(pl.col('percent_difference').min()).item() * 100:.2f}%"
+        self.analysis_results['avg_price_deviation'] = f"${self.comparison_df.select(pl.col('price_deviation').mean()).item():.2f}"
+        self.analysis_results['max_price_deviation'] = f"${self.comparison_df.select(pl.col('price_deviation').max()).item():.2f}"
+        self.analysis_results['min_price_deviation'] = f"${self.comparison_df.select(pl.col('price_deviation').min()).item():.2f}"
         self.analysis_results['deviate_more_than_1'] = self.comparison_df.filter(pl.col("price_deviation") > 1).shape[0]
         self.analysis_results['deviate_more_than_10'] = self.comparison_df.filter(pl.col("price_deviation") > 10).shape[0]
         self.analysis_results['deviate_more_than_100'] = self.comparison_df.filter(pl.col("price_deviation") > 100).shape[0]
@@ -260,25 +248,33 @@ class SamplePriceComp:
             .alias("comparison_string")
         )
 
-    def format_analysis_results(self):
-        # Format the comparison items DataFrame columns and store the results in the analysis_results dictionary
-        formatted_df = dff.format_percent_columns(self.comparison_df, ["percent_difference"])
-        formatted_df = dff.format_price_columns(formatted_df,
-                                                      ["price", "average_price_on_gsa", "price_deviation"])
-        self.analysis_results['comparison_items'] = (
-            formatted_df.to_dicts()) if formatted_df is not None else []
+    def analysis_results_dict(self):
+        """Store the analysis results in the dictionary attribute."""
+        context = {
+            'company_name': self.analysis_results['company_name'],
+            'current_date': self.analysis_results['current_date'],
+            'contract_number': self.analysis_results['contract_number'],
+            'sam_uie': self.analysis_results['sam_uie'],
+            'option_end_date': self.analysis_results['option_end_date'],
+            'days_until_option_end': self.analysis_results['days_until_option_end'],
+            'ultimate_end_date': self.analysis_results['ultimate_end_date'],
+            'days_until_ultimate_end': self.analysis_results['days_until_ultimate_end'],
+            'below_competitor': self.analysis_results['below_competitor'],
+            'above_competitor': self.analysis_results['above_competitor'],
+            'avg_percent_diff': self.analysis_results['avg_percent_diff'],
+            'max_percent_diff': self.analysis_results['max_percent_diff'],
+            'min_percent_diff': self.analysis_results['min_percent_diff'],
+            'avg_price_deviation': self.analysis_results['avg_price_deviation'],
+            'max_price_deviation': self.analysis_results['max_price_deviation'],
+            'min_price_deviation': self.analysis_results['min_price_deviation'],
+            'deviate_more_than_1': self.analysis_results['deviate_more_than_1'],
+            'deviate_more_than_10': self.analysis_results['deviate_more_than_10'],
+            'deviate_more_than_100': self.analysis_results['deviate_more_than_100'],
+            'manufacture_avg_diff': self.manufacture_avg_diff_df.to_dicts(),  # Convert DataFrame to list of dicts
+            'comparison_items': self.comparison_df.to_dicts(),  # Convert DataFrame to list of dicts
+        }
+        self.analysis_results = context
 
-        # Format and store the manufacturer average difference in the analysis_results dictionary
-        self.manufacture_avg_diff_df = dff.format_percent_columns(self.manufacture_avg_diff_df, ["average_percent_difference"])
-        # Store the results in the dictionary attribute
-        self.analysis_results['manufacture_avg_diff'] =(
-            self.manufacture_avg_diff_df.to_dicts()) if self.manufacture_avg_diff_df is not None else []
-
-        # Format remaining analysis_results keys
-        money_keys = ['avg_price_deviation', 'max_price_deviation', 'min_price_deviation', ]
-        self.analysis_results = dff.format_money_dict(self.analysis_results, money_keys)  # Format the money keys
-        percent_keys = ['avg_percent_diff', 'max_percent_diff', 'min_percent_diff']
-        self.analysis_results = dff.format_percent_dict(self.analysis_results, percent_keys)  # Format the percent keys
 
     def generate_pdf(self):
         """Generate a Word document report based on the analysis results using a template.
@@ -289,6 +285,7 @@ class SamplePriceComp:
         template_path = "src/templates/template_report.docx"  # Update with the actual path to your template
         doc = DocxTemplate(template_path)
 
+        print(self.analysis_results)
         # Render the template with the context
         doc.render(self.analysis_results)
 
