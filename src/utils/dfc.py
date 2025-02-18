@@ -12,11 +12,7 @@ class DataFrameCleaner:
         # Format the percent_difference column to limit decimal places to 2
         for column in column_list:
             df = df.with_columns(
-                pl.col(column).round(2)
-            )
-        for column in column_list:
-            df = df.with_columns(
-                pl.col(column).map_elements(
+                (pl.col(column) * 100).round(2).map_elements(
                     lambda x: f"{x:.2f}%" if x is not None else "N/A",
                     return_dtype=pl.Utf8
                 )
@@ -26,10 +22,6 @@ class DataFrameCleaner:
     @staticmethod
     def format_price_columns(df, column_list):
         # Format the percent_difference column to limit decimal places to 2
-        for column in column_list:
-            df = df.with_columns(
-                pl.col(column).round(2)
-            )
         for column in column_list:
             df = df.with_columns(
                 pl.col(column).round(2).map_elements(

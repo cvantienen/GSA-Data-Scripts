@@ -101,7 +101,7 @@ class SamplePriceComp:
         self.calculate_comparison_df()
         self.comparison_statements()
         self.calculate_manufacture_average_diff()
-        self.analysis_results_dict()
+        self.get_analysis_results_dict()
         self.generate_pdf()
 
     def get_contractor_info(self):
@@ -185,6 +185,7 @@ class SamplePriceComp:
                                                                     on="manufacturer_part_number", how="left")
 
         # Calculate the percent difference from the Contractors price vs the average price on GSA
+        #TODO fomat the percent difference so its not decimal value.
         self.comparison_df = contractor_items_with_comps.with_columns(
             ((pl.col("price") - pl.col("average_price_on_gsa")) / pl.col("average_price_on_gsa")).alias(
                 "percent_difference")
@@ -223,15 +224,20 @@ class SamplePriceComp:
         )
         # Add Column to Classify average percent difference
         self.manufacture_avg_diff_df = man_avg_percent_diff.with_columns(
-            pl.when(pl.col("average_percent_difference") >= 0)
-            .then(pl.lit("Higher Price on GSA"))
-            .otherwise(pl.lit("Lower Price on GSA"))
+            pl.when(pl.col("average_percent_difference") > 0)
+            .then(pl.lit("Higher Price Average vs Competitor"))
+            .when(pl.col("average_percent_difference") == 0)
+            .then(pl.lit("Same Price As Competitors"))
+            .when(pl.col("average_percent_difference").is_null())
+            .then(pl.lit("No Competitors on GSA"))
+            .otherwise(pl.lit("Lower Price Average vs Competitor"))
             .alias("comparison_string")
         )
 
-    def analysis_results_dict(self):
-        dfc.format_percent_columns(self.comparison_df, ["percent_difference"])
-        dfc.format_price_columns(self.comparison_df, ["price", "average_price_on_gsa", "price_deviation"])
+    def get_analysis_results_dict(self):
+        self.comparison_df = dfc.format_percent_columns(self.comparison_df, ["percent_difference"])
+        self.comparison_df = dfc.format_price_columns(self.comparison_df, ["price", "average_price_on_gsa", "price_deviation"])
+        self.manufacture_avg_diff_df = dfc.format_percent_columns(self.manufacture_avg_diff_df, ["average_percent_difference"])
         context = {
             'company_name': self.analysis_results['company_name'],
             'current_date': self.analysis_results['current_date'],
@@ -241,6 +247,7 @@ class SamplePriceComp:
             'days_until_option_end': self.analysis_results['days_until_option_end'],
             'ultimate_end_date': self.analysis_results['ultimate_end_date'],
             'days_until_ultimate_end': self.analysis_results['days_until_ultimate_end'],
+            'product_count': self.analysis_results['product_count'],
             'below_competitor': self.analysis_results['below_competitor'],
             'above_competitor': self.analysis_results['above_competitor'],
             'avg_percent_diff': self.analysis_results['avg_percent_diff'],
@@ -266,7 +273,6 @@ class SamplePriceComp:
         template_path = "src/templates/template_report.docx"  # Update with the actual path to your template
         doc = DocxTemplate(template_path)
 
-        print(self.analysis_results)
         # Render the template with the context
         doc.render(self.analysis_results)
 
