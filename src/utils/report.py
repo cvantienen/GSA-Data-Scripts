@@ -3,39 +3,11 @@ import polars as pl
 from datetime import date
 from docxtpl import DocxTemplate
 import subprocess
+from .dfc import DataFrameCleaner
 from test.sampleCompany import get_sample_company
 
-class DataFrameCleaner:
-    """A class of just static methods to clean the DataFrame columns and format the data."""
-    def __init__(self):
-        pass
+dfc = DataFrameCleaner()
 
-    @staticmethod
-    def format_percent_columns(df, column_list):
-        # Format the percent_difference column to limit decimal places to 2
-        for column in column_list:
-            df = df.with_columns(
-                pl.col(column).map_elements(
-                    lambda x: f"{x * 100:.2f}%" if x is not None else "N/A",
-                    return_dtype=pl.Utf8
-                )
-            )
-            return df
-
-    @staticmethod
-    def format_price_columns(df, column_list):
-        # Format the percent_difference column to limit decimal places to 2
-        for column in column_list:
-            df = df.with_columns(
-                pl.col(column).map_elements(
-                    lambda x: f"${x:.2f}" if x is not None else "N/A",
-                    return_dtype=pl.Utf8
-                )
-            )
-            return df
-
-
-dff = DataFrameCleaner()
 
 # TODO: Add the DataFrameCleaner class to the SamplePriceComp class.
 class SamplePriceComp:
@@ -117,11 +89,10 @@ class SamplePriceComp:
         self.query_results_df = None
         self.contractor_items_df = None
         self.comparison_df = None
-        self.manufacture_avg_diff_df = None # Manufacture Average Difference
+        self.manufacture_avg_diff_df = None  # Manufacture Average Difference
 
         # Analysis results Dictionary
         self.analysis_results = {}
-
 
     def run_sample_report(self):
         self.get_contractor_info()
@@ -200,7 +171,8 @@ class SamplePriceComp:
         """
         # average price for competitor products found in the query results
         # (excluding the contractor's items from average calculation)
-        comp_average_price = self.query_results_df.filter(pl.col("source") == "competitor").group_by("manufacturer_part_number").agg(
+        comp_average_price = self.query_results_df.filter(pl.col("source") == "competitor").group_by(
+            "manufacturer_part_number").agg(
             pl.col("price").mean().alias("average_price_on_gsa")
         )
         # standard deviation of prices for each manufacturer_part_number
@@ -209,7 +181,8 @@ class SamplePriceComp:
         )
         # Combine the average price and price deviation into a single DataFrame
         average_and_deviation = comp_average_price.join(price_deviation, on="manufacturer_part_number", how="left")
-        contractor_items_with_comps = self.contractor_items_df.join(average_and_deviation, on="manufacturer_part_number", how="left")
+        contractor_items_with_comps = self.contractor_items_df.join(average_and_deviation,
+                                                                    on="manufacturer_part_number", how="left")
 
         # Calculate the percent difference from the Contractors price vs the average price on GSA
         self.comparison_df = contractor_items_with_comps.with_columns(
@@ -222,15 +195,23 @@ class SamplePriceComp:
         # Calculate general statements based on the Price % difference From GSA Average
         self.analysis_results['below_competitor'] = self.comparison_df.filter(pl.col("percent_difference") < 0).shape[0]
         self.analysis_results['above_competitor'] = self.comparison_df.filter(pl.col("percent_difference") > 0).shape[0]
-        self.analysis_results['avg_percent_diff'] = f"{self.comparison_df.select(pl.col('percent_difference').mean()).item() * 100:.2f}%"
-        self.analysis_results['max_percent_diff'] = f"{self.comparison_df.select(pl.col('percent_difference').max()).item() * 100:.2f}%"
-        self.analysis_results['min_percent_diff'] = f"{self.comparison_df.select(pl.col('percent_difference').min()).item() * 100:.2f}%"
-        self.analysis_results['avg_price_deviation'] = f"${self.comparison_df.select(pl.col('price_deviation').mean()).item():.2f}"
-        self.analysis_results['max_price_deviation'] = f"${self.comparison_df.select(pl.col('price_deviation').max()).item():.2f}"
-        self.analysis_results['min_price_deviation'] = f"${self.comparison_df.select(pl.col('price_deviation').min()).item():.2f}"
+        self.analysis_results[
+            'avg_percent_diff'] = f"{self.comparison_df.select(pl.col('percent_difference').mean()).item() * 100:.2f}%"
+        self.analysis_results[
+            'max_percent_diff'] = f"{self.comparison_df.select(pl.col('percent_difference').max()).item() * 100:.2f}%"
+        self.analysis_results[
+            'min_percent_diff'] = f"{self.comparison_df.select(pl.col('percent_difference').min()).item() * 100:.2f}%"
+        self.analysis_results[
+            'avg_price_deviation'] = f"${self.comparison_df.select(pl.col('price_deviation').mean()).item():.2f}"
+        self.analysis_results[
+            'max_price_deviation'] = f"${self.comparison_df.select(pl.col('price_deviation').max()).item():.2f}"
+        self.analysis_results[
+            'min_price_deviation'] = f"${self.comparison_df.select(pl.col('price_deviation').min()).item():.2f}"
         self.analysis_results['deviate_more_than_1'] = self.comparison_df.filter(pl.col("price_deviation") > 1).shape[0]
-        self.analysis_results['deviate_more_than_10'] = self.comparison_df.filter(pl.col("price_deviation") > 10).shape[0]
-        self.analysis_results['deviate_more_than_100'] = self.comparison_df.filter(pl.col("price_deviation") > 100).shape[0]
+        self.analysis_results['deviate_more_than_10'] = self.comparison_df.filter(pl.col("price_deviation") > 10).shape[
+            0]
+        self.analysis_results['deviate_more_than_100'] = \
+        self.comparison_df.filter(pl.col("price_deviation") > 100).shape[0]
 
     def calculate_manufacture_average_diff(self):
         """ Provides Manufacture Pricing Overview -  Calculates the average percent difference for pricing based on
@@ -249,7 +230,8 @@ class SamplePriceComp:
         )
 
     def analysis_results_dict(self):
-        """Store the analysis results in the dictionary attribute."""
+        dfc.format_percent_columns(self.comparison_df, ["percent_difference"])
+        dfc.format_price_columns(self.comparison_df, ["price", "average_price_on_gsa", "price_deviation"])
         context = {
             'company_name': self.analysis_results['company_name'],
             'current_date': self.analysis_results['current_date'],
@@ -274,7 +256,6 @@ class SamplePriceComp:
             'comparison_items': self.comparison_df.to_dicts(),  # Convert DataFrame to list of dicts
         }
         self.analysis_results = context
-
 
     def generate_pdf(self):
         """Generate a Word document report based on the analysis results using a template.

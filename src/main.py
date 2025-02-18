@@ -1,5 +1,5 @@
 from utils.config import get_db_connection
-from utils.report import  SamplePriceComp
+from utils.report import SamplePriceComp
 """
 Build using docker
     EXAMPLE -$ build -t container-name .
